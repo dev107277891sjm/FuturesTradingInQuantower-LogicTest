@@ -10,7 +10,7 @@ The intent is to support the Upwork/Quantower request: **stability + transparenc
 
 ## Quick start
 
-### 1) Run unit tests
+### 1) Run unit tests (from repository root)
 ```powershell
 dotnet test QuantowerEmaStrategyTestSystem.sln -c Release
 ```
@@ -23,17 +23,21 @@ dotnet test QuantowerEmaStrategyTestSystem.sln -c Release
 dotnet run --project src/EmaStrategy.Simulator/EmaStrategy.Simulator.csproj -c Release
 ```
 
-**Headless console** (same defaults as before; useful for scripts/CI):
+**Headless console** (useful for scripts/CI; uses `SimulatorOptions` defaults with a small explicit subset in code—see `src/EmaStrategy.Simulator/Program.cs`):
 
 ```powershell
 dotnet run --project src/EmaStrategy.Simulator/EmaStrategy.Simulator.csproj -c Release -- console
 ```
 
+Run these commands from the **repository root** (where `QuantowerEmaStrategyTestSystem.sln` lives).
+
 CSV outputs are written under:
 
-`report/exports/simulator/<symbol>/live/*`
+`report/exports/simulator/<symbol>/live/`
 
-The **symbol** field is a label used for the output folder (for example `MNQ`); it does not connect to a live broker. Bar data is loaded from the default repo file `.temp/_srv/MNQ_50k_Bar_History.csv` when present (columns `CloseTime,Open,High,Low,Close`). If that file is missing or yields no rows, the simulator generates synthetic bars using the synthetic settings in the UI.
+Typical files: `bar_stream.csv`, `evaluations.csv`, `trade_entries.csv`, `trade_exits.csv`.
+
+The **symbol** field is a label used for the output folder (for example `MNQ`); it does not connect to a live broker. Bar data is loaded from the default repo file `.temp/_srv/MNQ_50k_Bar_History.csv` when present (columns `CloseTime`, `Open`, `High`, `Low`, `Close`). If that file is missing or yields no rows, the simulator generates synthetic bars (counts and start price from **Synthetic** fields in the UI, or from `SimulatorOptions` when using console mode).
 
 ## Quantower Real-time Adapter
 
@@ -66,16 +70,14 @@ Generated files:
 ## How it maps to the job requirements
 
 - **EMA calculation**: configurable EMA periods
-- **Signals**: BUY/SELL/NO TRADE based on EMA ordering (EMA cloud)
+- **Signals**: BUY/SELL/NO TRADE from stacked EMA ordering; **cloud color** in logs uses the fast vs slow EMA pair (see `EmaCloudLogic`)
 - **Logging**: evaluations + trade entry/exit exported to CSV and printed to console
 - **Stability**: warmup/history gating in the strategy engine
 
 ## Configuration
 
-- **Simulator UI**: run the simulator project without arguments; all parameters are edited on the form. Logic lives in `SimulatorOptions`, `SimulationService`, and `MainForm`.
-- **Console mode**: defaults are in `Program.RunConsole()` (used when you pass `console` as shown above).
+- **Simulator UI**: run the simulator project without arguments. On startup, controls are filled from `new SimulatorOptions()` so defaults match `SimulatorOptions` / `EmaStrategyConfig`. Logic lives in `SimulatorOptions`, `SimulationService`, and `MainForm`.
+- **Console mode**: when you pass `console`, `Program` invokes a private `RunConsole` method in `src/EmaStrategy.Simulator/Program.cs` that builds a `SimulatorOptions` instance (explicit fields plus class defaults for the rest).
 
-If you want to override behavior locally via environment variables, create a `.env` file at the repo root. Note: `.env` is not yet wired into the simulator UI; it is reserved for future use.
-
-`.temp/` is treated as input/artifact storage and is ignored by git via `.gitignore`.
+The simulator does **not** load a `.env` file today; `.env` is listed in `.gitignore` for possible future use. `.temp/` and `report/exports/` are ignored by git (see `.gitignore`).
 
