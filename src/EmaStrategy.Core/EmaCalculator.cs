@@ -6,7 +6,7 @@ public sealed class EmaSet
     private readonly Dictionary<int, decimal?> _emaByPeriod;
     private readonly Dictionary<int, decimal> _kByPeriod;
 
-    public int MaxPeriod => _periods[^1];
+    public int MaxPeriod => _periods[_periods.Length - 1];
 
     public EmaSet(IEnumerable<int> periods)
     {

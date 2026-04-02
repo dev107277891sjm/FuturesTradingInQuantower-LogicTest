@@ -10,7 +10,7 @@ public static class EmaCloudLogic
 
         var fast = emaValues[periods[0]];
         var mid = emaValues[periods[1]];
-        var slow = emaValues[periods[^1]];
+        var slow = emaValues[periods[periods.Length - 1]];
 
         if (fast > mid && mid > slow)
             return CloudColor.Green;

@@ -23,6 +23,34 @@ dotnet run --project src/EmaStrategy.Simulator/EmaStrategy.Simulator.csproj -c R
 CSV outputs are written to:
 `report/exports/historical/*` and `report/exports/live/*`
 
+## Quantower Real-time Adapter
+
+This project also includes a Quantower Algo adapter that drives `EmaStrategy.Core` using real-time market data and exports CSV logs from inside Quantower.
+
+### Build
+```powershell
+dotnet build QuantowerEmaStrategyTestSystem.sln -c Release
+```
+
+The adapter assembly is produced under:
+- `src/QuantowerEmaStrategyAdapter/bin/Release/net9.0/QuantowerEmaStrategyAdapter.dll`
+
+### Output files
+When the strategy runs inside Quantower, CSVs are written to:
+- `report/exports/quantower_realtime/<run_timestamp>/`
+
+Generated files:
+- `bar_stream.csv`
+- `evaluations.csv`
+- `trade_entries.csv`
+- `trade_exits.csv`
+- `order_updates.csv`
+
+### How it feeds the EMA engine
+- Historical warmup is seeded from `Symbol.GetHistory(Period.MIN1, ...)`.
+- Realtime updates come from `Symbol.NewLast`.
+- Realtime data is aggregated into tick-bars of `25,000` trade ticks per bar and then fed to `EmaStrategy.Core` (`StrategyEngine.ProcessBar`).
+
 ## How it maps to the job requirements
 
 - **EMA calculation**: configurable EMA periods

@@ -215,7 +215,7 @@ public sealed class StrategyEngine
         _positionQtyContracts = qtyContracts;
         _entryTimeUtc = entryTimeUtc;
         _entryPrice = entryPrice;
-        _emaAtEntry = new Dictionary<int, decimal>(emaValues);
+        _emaAtEntry = emaValues.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
         TradeEntry?.Invoke(new TradeEntrySnapshot(
             tradeId,
@@ -290,7 +290,7 @@ public sealed class StrategyEngine
             exitTimeUtc,
             exitPrice,
             pnl,
-            new Dictionary<int, decimal>(emaValues)));
+            emaValues.ToDictionary(kvp => kvp.Key, kvp => kvp.Value)));
 
         _hasPosition = false;
         _positionQtyContracts = 0;
@@ -318,7 +318,7 @@ public sealed class StrategyEngine
             cloudColor,
             bias,
             ComputeDeviationPct(price, emaValues, _config.EmaPeriods[0]),
-            new Dictionary<int, decimal>(emaValues),
+            emaValues.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
             _hasPendingOrder,
             cooldownActive,
             reason));
