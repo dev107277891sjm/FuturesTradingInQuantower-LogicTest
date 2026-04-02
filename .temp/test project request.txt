@@ -1,0 +1,20 @@
+🔷 🧠 PROJECT: Quantower EMA Strategy Test System
+🔷 🎯 OBJECTIVE
+
+Build a testable EMA-based trading strategy in Quantower that:
+
+Fixes data flow issues
+Generates reliable signals
+Logs all evaluations and decisions
+Exports historical and live data to CSV
+
+👉 Focus: stability + transparency, NOT full trading system
+
+🔷 📦 DELIVERABLE
+
+A C# Quantower Strategy that:
+
+Runs without errors
+Logs all actions (console + CSV)
+Generates BUY / SELL / NO TRADE signals
+Exports historical and live data
