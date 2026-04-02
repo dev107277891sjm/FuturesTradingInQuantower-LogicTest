@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("EmaStrategy.Tests")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+6258a1631587b8bb63084f660e760b1e47087540")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+cc61140fdfc95132c55a79493b3f4b96bc94ca26")]
 [assembly: System.Reflection.AssemblyProductAttribute("EmaStrategy.Tests")]
 [assembly: System.Reflection.AssemblyTitleAttribute("EmaStrategy.Tests")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
