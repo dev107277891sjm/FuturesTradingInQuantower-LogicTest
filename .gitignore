@@ -1,0 +1,26 @@
+# Build outputs
+bin/
+obj/
+
+# .NET user/secrets
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# VS / Rider
+.vscode/
+.idea/
+
+# Simulator/test artifacts
+.temp/
+report/exports/
+
+# Environment variables (do not commit real secrets)
+.env
+
+# OS / tooling
+Thumbs.db
+Desktop.ini
+
