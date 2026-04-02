@@ -1,0 +1,24 @@
+DateTime,EMA12,EMA30,EMA50,CloudColor,Price,NetQty,FilledContracts,PendingContracts,TotalContracts,UnrealizedLoss,LongSignal,ShortSignal,CooldownActive,MaxContractsReached,AverageDownEligible,Reason,OrderPlaced
+2026-04-01 05:05:27,24007.78,24007.89,24008.03,Red,24018.50,0,0,0,0,0.00,False,False,False,False,False,No long/short signal while flat,False
+2026-04-01 05:35:18,24051.77,24051.86,24052.10,Red,24056.25,0,0,0,0,0.00,False,False,False,False,False,No long/short signal while flat,False
+2026-04-01 13:45:49,24107.13,24107.63,24107.83,Red,24092.25,0,Evaluation run,False
+2026-04-01 13:46:04,24107.13,24107.63,24107.83,Red,24084.50,0,Evaluation run,False
+2026-04-01 13:46:19,24107.13,24107.63,24107.83,Red,24086.50,0,Evaluation run,False
+2026-04-01 13:46:34,24107.13,24107.63,24107.83,Red,24097.00,0,Evaluation run,False
+2026-04-01 13:46:49,24107.13,24107.63,24107.83,Red,24099.00,0,Evaluation run,False
+2026-04-01 13:47:04,24107.13,24107.63,24107.83,Red,24091.25,0,Evaluation run,False
+2026-04-01 13:47:19,24107.13,24107.63,24107.83,Red,24088.75,0,Evaluation run,False
+2026-04-01 13:47:34,24107.13,24107.63,24107.83,Red,24077.00,0,Evaluation run,False
+2026-04-01 13:47:49,24107.13,24107.63,24107.83,Red,24074.00,0,Evaluation run,False
+2026-04-01 13:48:04,24107.13,24107.63,24107.83,Red,24069.50,0,Evaluation run,False
+2026-04-01 13:48:19,24107.13,24107.63,24107.83,Red,24062.25,0,Evaluation run,False
+2026-04-01 13:48:34,24107.13,24107.63,24107.83,Red,24080.75,0,Evaluation run,False
+2026-04-01 13:48:49,24107.13,24107.63,24107.83,Red,24078.50,0,Evaluation run,False
+2026-04-01 13:49:04,24107.13,24107.63,24107.83,Red,24069.50,0,Evaluation run,False
+2026-04-01 13:49:19,24107.13,24107.63,24107.83,Red,24065.00,0,Evaluation run,False
+2026-04-01 13:49:34,24107.13,24107.63,24107.83,Red,24071.25,0,Evaluation run,False
+2026-04-01 13:49:49,24107.13,24107.63,24107.83,Red,24068.00,0,Evaluation run,False
+2026-04-01 13:50:04,24107.13,24107.63,24107.83,Red,24069.50,0,Evaluation run,False
+2026-04-01 13:50:19,24107.13,24107.63,24107.83,Red,24080.75,0,Evaluation run,False
+2026-04-01 13:50:34,24107.13,24107.63,24107.83,Red,24075.75,0,Evaluation run,False
+2026-04-01 13:50:49,24107.13,24107.63,24107.83,Red,24084.75,0,Evaluation run,False

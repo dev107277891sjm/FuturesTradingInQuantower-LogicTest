@@ -1,0 +1,6 @@
+C# Programmer for Futures Trading Program in Quantower
+Posted 5 hours ago
+Worldwide
+
+Summary
+We are seeking an experienced C# programmer with a strong understanding of trading concepts to assist in developing a futures trading program for Quantower. The ideal candidate will have prior experience with SuperGrok and be able to enhance existing functionalities as well as create new features. A solid grasp of market mechanics and the ability to work with trading algorithms is essential. If you have a passion for trading and programming, we would love to hear from you!

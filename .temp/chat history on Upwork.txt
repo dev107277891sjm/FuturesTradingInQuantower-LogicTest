@@ -1,0 +1,199 @@
+
+Zain Ul Haq
+8:33 PM
+Hello, I am Zain, a software engineer with strong experience in C# and trading system development.
+
+
+
+I understand you need a futures trading program in Quantower with enhancements to existing features and new algorithmic capabilities.
+
+
+
+I recently built a high-performance trading system in C# for options trading. The system processed signals, executed trades in real time, and sent notifications to users. I integrated broker APIs, designed an event-driven architecture, and used RabbitMQ for reliable messaging. I also implemented Telegram and Discord notifications for live updates.
+
+
+
+This experience is directly aligned with building and improving trading systems. I have a strong understanding of market mechanics and algorithmic logic. I can quickly adapt to Quantower and extend your system with clean and efficient code.
+
+
+
+I focus on performance, reliability, and clear structure. I am comfortable working hourly and collaborating closely.
+
+
+
+My portfolio link is below.
+https://zain-portfolio-orpin.vercel.app/
+
+
+
+Rate: $30/hr
+Availability: up to 30 hrs/week
+
+Message Blocked
+We didn't send this message because it includes a reference to another messaging platform. You can only share this after a contract starts. Review our policy for details.
+SS
+Steve S
+8:33 PM
+Thanks for getting back to me.
+
+
+
+I already have a strategy and trading rules. I am a bit more comfortable with Python, but I am not a programmer by trade. I gave Grok / SuperGrok my trading criteria to write the C# program as that's the language that Quantower Algo (an extension in Visual Studio Community 2022) is built in. The programs I tried to run are not generating trade signals or logging trades and trade evaluations to a CSV file. Even something as simple as exporting the most recent 100 tick bar candles is not working.
+
+
+
+So, I would like the program to do a couple of things:
+
+
+
+1 - log actual trades to a CSV file: date, time, criteria values (which I will provide), price, etc. both at entry and at exit
+2 - log trade evaluations - whether an order is filled or not and log similar data to above and reason for not executing a trade
+3 - after an evaluation, wait 5 seconds or 30 seconds or 10 minutes - whatever, before the next evaluation
+4 - wait for history to load before doing any evaluations or placing any trades. (putting this here since it was one of the issues I experienced). Need to export the historical data to a csv with certain key fields: (I will provide details)
+5 - calculate updated EMA values with each candle close. 15 EMA, 35 EMA, 50 EMA, 100 EMA for example.
+6 - Have an option to enter/update EMAs and ticks that form tick bars... (I can explain this) - or send screenshots.
+7 - Any suggestions to make this better, especially on CPU usage / Data pull requests / stream.
+8 - Safeguards like: Not place multiple orders back to back, or placing buy orders and short orders at the same time, or placing short orders while I have long positions, ... and limiting the number of orders or contracts I can open, etc. No trading between certain hours or on holidays, etc.
+9 - Criteria is to calculate EMAs (adjustable e.g. 15, 35, 50 and 100 EMAs one day, and another day 20, 40, 50, 120 EMAs) - and then trade off of 5 minute candles for example, or trade on 25,000 ticks tick bars. Option enter on the prior candle close, open, high, low, EMAs, <--- need a drop down?
+
+
+
+What are your thoughts? What would be your approach?
+
+Zain Ul Haq
+9:50 PM
+Hi, thanks for the detailed explanation. This helps a lot.
+
+
+
+I understand the main issues are missing trade signals, no CSV logging, and instability in data handling like tick bars and history loading.
+You also want structured logging, controlled evaluation timing, EMA-based strategy logic, and strong safeguards around order execution.
+
+
+
+My approach would be to first stabilize the data flow and event handling inside Quantower.
+I would ensure historical data loads correctly before any logic runs. Then I would implement a clean event-driven structure so signals, evaluations, and executions are handled reliably.
+
+
+
+For your requirements, I would structure it in layers. One layer handles data ingestion and candle or tick formation. One layer handles strategy logic like EMA calculations and signal generation. One layer handles execution and safeguards. Another layer handles logging and exports to CSV.
+
+
+
+For logging, I will create a structured logger that records every trade, evaluation, and rejection reason with timestamps and all required fields. This will give you full visibility.
+
+
+
+For timing, I will implement controlled delays between evaluations so the system behaves predictably and avoids over-triggering.
+
+
+
+For EMAs and flexibility, I will make all parameters configurable so you can easily adjust values like 15, 35, 50, 100 without changing code.
+
+
+
+For safeguards, I will enforce strict position checks, order limits, and trading rules so no conflicting or duplicate orders are placed.
+
+
+
+I will also optimize performance by reducing unnecessary data calls and managing CPU usage efficiently.
+
+
+
+If you want, we can start with fixing the current issues first, especially logging and signal generation, then expand step by step.
+
+
+
+Let me know if you would like me to review your current code and identify the exact failure points.
+
+SS
+Steve S
+10:01 PM
+Sounds good, Zain.
+
+
+
+What would be the deliverable in this? Would you send me a C# script or something else? Also, I am assuming you would test the strategy on your end to make sure things are working before sending me to test? (Means you would have a Quantower subscription (free version available) and Visual Studio, etc. I don't want to commit to something and then go back and forth with errors or things that are not working, etc.
+
+I have uploaded some log files for you to see the fields I will want. One file has a ton of fields. I don't think we want all that.
+
+
+
+Trade criteria: let's say I want to trade off of 20 EMA, 50 EMA, and 100 EMA. If 20 EMA > 50 EMA > 100 EMA, focus on buy only orders. Buy at prior candle open or close, or mid or high or low ... (I will choose one). If 100 EMA > 50 EMA > 20 EMA, focus on selling... and I will pick similar prior candle OHLC point.
+
+
+
+If price is a certain number of points from one of the EMAs, say 20 EMA, then wait. To avoid chasing.
+
+
+
+Take profit - configurable number of points or $, and stop loss configurable: $, or EMAs or points.
+
+
+
+Max contracts - both open and closed.
+
+
+
+Symbol: configurable - we can start with MNQ, NQ, ES, MES as options
+
+
+
+You will see an EMA cloud in the fields in the csv files. This was one of the criteria where if 20 EMA is above 50 EMA, cloud is green; if 20 EMA is below 50 EMA, cloud is red.
+
+
+
+Configurable average down (Yes/No). I think this is a good start. (Other things I already mentioned earlier.
+
+8 files 
+Chart4-1-2026.csv
+2 MB
+MNQ_50k_Bar_History.csv
+45 bytes
+MNQ_Completed_Trades.csv
+96 bytes
+MNQ_EvaluationLog.csv
+142 bytes
+MNQ_Evaluations_Log.csv
+1 MB
+MNQ_Main_Strategy_Logs.csv
+215 bytes
+MNQ_Position_Evaluations.csv
+2 kB
+MNQ_TradeLog.csv
+179 bytes
+Zain Ul Haq
+10:30 PM
+Hi Steve, thanks for the detailed message and the files. This gives very clear direction.
+
+
+
+For deliverables, I will provide a complete C# strategy script compatible with Quantower.
+I need some time to build a test project.
+
+SS
+Steve S
+10:33 PM
+Sounds good. How long do you think this project would take you to complete?
+
+Zain Ul Haq
+10:36 PM
+It's already midnight here, so I will start building the test project tomorrow morning, Is that too late?
+
+SS
+Steve S
+10:37 PM
+That's fine. No rush. I think I will work with several people and once I see the demo, I will pick two people to work with. One will be primary and the other backup. Thanks and have a goodnight!
+
+Zain Ul Haq
+10:44 PM
+Thanks for your understanding.
+
+
+
+I will send the demo by 9 AM ET tomorrow.
+I will ask you if I have any question to implement strategy logic.
+
+
+
+Have a great day.
