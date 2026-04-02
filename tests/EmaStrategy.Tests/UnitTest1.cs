@@ -26,7 +26,7 @@ public class UnitTest1
     }
 
     [Fact]
-    public void EmaCloudLogic_DetectsBuySellNoTrade()
+    public void EmaCloudLogic_BiasAndCloudAreIndependent()
     {
         var buyMap = new Dictionary<int, decimal>
         {
@@ -35,7 +35,7 @@ public class UnitTest1
             [100] = 3m
         };
         Assert.Equal(Bias.Buy, EmaCloudLogic.DetermineBias(buyMap));
-        Assert.Equal(CloudColor.Green, EmaCloudLogic.DetermineCloudColor(buyMap));
+        Assert.Equal(CloudColor.Green, EmaCloudLogic.DetermineCloudColor(buyMap, 20, 50));
 
         var sellMap = new Dictionary<int, decimal>
         {
@@ -44,7 +44,7 @@ public class UnitTest1
             [100] = 5m
         };
         Assert.Equal(Bias.Sell, EmaCloudLogic.DetermineBias(sellMap));
-        Assert.Equal(CloudColor.Red, EmaCloudLogic.DetermineCloudColor(sellMap));
+        Assert.Equal(CloudColor.Red, EmaCloudLogic.DetermineCloudColor(sellMap, 20, 50));
 
         var noneMap = new Dictionary<int, decimal>
         {
@@ -53,6 +53,14 @@ public class UnitTest1
             [100] = 3.5m
         };
         Assert.Equal(Bias.None, EmaCloudLogic.DetermineBias(noneMap));
-        Assert.Equal(CloudColor.Gray, EmaCloudLogic.DetermineCloudColor(noneMap));
+        // Cloud is only 20 vs 50: 4 > 3 → green even though 20/50/100 are not stacked.
+        Assert.Equal(CloudColor.Green, EmaCloudLogic.DetermineCloudColor(noneMap, 20, 50));
+    }
+
+    [Fact]
+    public void EmaCloudLogic_CloudGrayWhenFastEqualsSlow()
+    {
+        var m = new Dictionary<int, decimal> { [20] = 4m, [50] = 4m, [100] = 3m };
+        Assert.Equal(CloudColor.Gray, EmaCloudLogic.DetermineCloudColor(m, 20, 50));
     }
 }

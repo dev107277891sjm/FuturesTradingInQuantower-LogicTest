@@ -20,35 +20,86 @@ public enum EntryFillMode
     SignalBarClose = 1
 }
 
+/// <summary>Which price from the prior completed candle to use for entry.</summary>
+public enum PriorCandlePriceField
+{
+    Open = 0,
+    Close = 1,
+    High = 2,
+    Low = 3,
+    Mid = 4
+}
+
+public enum TakeProfitMode
+{
+    Points = 0,
+    Dollars = 1
+}
+
+public enum StopLossMode
+{
+    Points = 0,
+    Dollars = 1,
+    Ema = 2
+}
+
 public readonly record struct Bar(long Index, DateTime TimeUtc, decimal Open, decimal High, decimal Low, decimal Close);
 
 public sealed class EmaStrategyConfig
 {
+    /// <summary>Must include 20, 50, 100 for the client strategy (defaults).</summary>
     public int[] EmaPeriods { get; init; } = new[] { 20, 50, 100 };
 
-    // Minimum time between evaluation attempts (debounce).
+    public int CloudFastPeriod { get; init; } = 20;
+
+    public int CloudSlowPeriod { get; init; } = 50;
+
     public TimeSpan EvaluationInterval { get; init; } = TimeSpan.FromSeconds(30);
 
-    // Warmup bars required before any evaluation.
     public int WarmupBars { get; init; } = 100;
 
-    public int MaxContracts { get; init; } = 1;
+    /// <summary>Max contracts in open position (gross).</summary>
+    public int MaxOpenContracts { get; init; } = 1;
 
-    public decimal OrderQuantityContracts { get; init; } = 1;
+    /// <summary>Max cumulative contracts closed in the session (stops new entries when reached).</summary>
+    public int MaxClosedContractsPerSession { get; init; } = int.MaxValue;
 
-    // Distance filter to avoid chasing (0 disables).
-    public decimal MinDistanceFromFastEmaPoints { get; init; } = 0m;
+    public decimal OrderQuantityContracts { get; init; } = 1m;
+
+    public PriorCandlePriceField EntryPriceField { get; init; } = PriorCandlePriceField.Close;
+
+    /// <summary>EMA period used for chasing distance (e.g. 20).</summary>
+    public int ChasingReferenceEmaPeriod { get; init; } = 20;
+
+    /// <summary>Minimum distance from reference EMA in points; 0 = off.</summary>
+    public decimal MinDistanceFromEmaPoints { get; init; } = 0m;
+
+    public TakeProfitMode TakeProfitMode { get; init; } = TakeProfitMode.Points;
 
     public decimal TakeProfitPoints { get; init; } = 10m;
+
+    /// <summary>Profit target in dollars (per position leg); converted using DollarsPerPointPerContract.</summary>
+    public decimal TakeProfitDollars { get; init; } = 20m;
+
+    public StopLossMode StopLossMode { get; init; } = StopLossMode.Points;
+
     public decimal StopLossPoints { get; init; } = 10m;
+
+    public decimal StopLossDollars { get; init; } = 20m;
+
+    /// <summary>When StopLossMode is Ema, exit when price crosses this EMA (e.g. 50).</summary>
+    public int StopLossAnchorEmaPeriod { get; init; } = 50;
+
+    /// <summary>e.g. MNQ ≈ $2 per index point per contract.</summary>
+    public decimal DollarsPerPointPerContract { get; init; } = 2m;
 
     public EntryFillMode FillMode { get; init; } = EntryFillMode.NextBarOpen;
 
-    // Cooldown after an entry attempt (also acts as "not multiple orders back-to-back").
     public TimeSpan CooldownAfterOrderPlaced { get; init; } = TimeSpan.FromSeconds(30);
 
-    // Cooldown after an exit.
     public TimeSpan CooldownAfterExit { get; init; } = TimeSpan.FromSeconds(30);
+
+    public bool AllowAverageDown { get; init; } = false;
 }
 
 public sealed record EvaluationSnapshot(
@@ -93,4 +144,3 @@ public sealed record TradeExitSnapshot(
     decimal ExitPrice,
     decimal ProfitLoss,
     IReadOnlyDictionary<int, decimal> EmaAtExit);
-

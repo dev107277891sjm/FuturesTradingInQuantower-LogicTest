@@ -1,20 +1,53 @@
 🔷 🧠 PROJECT: Quantower EMA Strategy Test System
 🔷 🎯 OBJECTIVE
 
-Build a testable EMA-based trading strategy in Quantower that:
+Build a testable EMA-based trading strategy that:
 
-Fixes data flow issues
-Generates reliable signals
-Logs all evaluations and decisions
-Exports historical and live data to CSV
+- Fixes data flow issues
+- Generates reliable signals
+- Logs evaluations and decisions (subset of fields aligned with client CSV samples — not every column from large chart exports)
+- Exports historical and live data to CSV
 
-👉 Focus: stability + transparency, NOT full trading system
+👉 Focus: stability + transparency, NOT a full production trading system
+
+🔷 📊 REFERENCE DATA
+
+Client-provided sample log layouts (see `.temp/_srv/`): Chart4-1-2026.csv, MNQ_50k_Bar_History.csv, MNQ_Completed_Trades.csv, MNQ_EvaluationLog.csv, MNQ_Evaluations_Log.csv, MNQ_Main_Strategy_Logs.csv, MNQ_Position_Evaluations.csv, MNQ_TradeLog.csv. The test harness exports a practical subset of these fields, not necessarily every column from the very wide chart file.
+
+🔷 📈 TRADE LOGIC (CRITERIA)
+
+1) EMAs: Trade off **20, 50, and 100** EMA (defaults; configurable in test UI).
+
+2) Direction:
+   - If **20 EMA > 50 EMA > 100 EMA** → **buy-only** focus (long signals only).
+   - If **100 EMA > 50 EMA > 20 EMA** → **sell-only** focus (short signals only).
+
+3) Entry price: **Prior candle** OHLC — user-selectable: **open, close, high, low, or mid** (mid = (high+low)/2 of prior bar).
+
+4) Chasing filter: If price is within **X points** of a chosen reference EMA (e.g. 20 EMA), **do not enter** (wait / skip).
+
+5) Take profit: **Configurable** — **points** or **dollars** (dollars converted using a configurable dollars-per-point-per-contract assumption for the simulator).
+
+6) Stop loss: **Configurable** — **points**, **dollars**, or **EMA-based** (e.g. stop relative to a chosen EMA period).
+
+7) Max contracts: Limits for **open** position size and **closed** volume per session (simulator tracks closed contracts to enforce cap).
+
+8) Symbol: Configurable preset options for testing — **MNQ, NQ, ES, MES** (label / folder naming; offline sim does not connect to a live feed).
+
+9) **EMA cloud** (for logging and UI):
+   - **Green** if **20 EMA > 50 EMA**
+   - **Red** if **20 EMA < 50 EMA**
+   - (Gray if undetermined / missing)
+
+10) **Average down**: **Yes / No** — when Yes, allow adding to a same-side position under rules; when No, no pyramiding / average-down adds.
 
 🔷 📦 DELIVERABLE
 
-A C# Quantower Strategy that:
+A C# solution that:
 
-Runs without errors
-Logs all actions (console + CSV)
-Generates BUY / SELL / NO TRADE signals
-Exports historical and live data
+- Runs without errors (simulator UI + unit tests + shared core library)
+- Logs actions (console + CSV) with fields aligned to the **subset** of client sample headers
+- Generates BUY / SELL / NO TRADE signals per rules above
+- Exports historical and live simulator passes to CSV under `report/exports/simulator/<symbol>/`
+
+Optional: Quantower adapter project uses the same core where applicable.

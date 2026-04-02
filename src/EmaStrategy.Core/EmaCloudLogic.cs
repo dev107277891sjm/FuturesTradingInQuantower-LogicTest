@@ -2,29 +2,28 @@ namespace EmaStrategy.Core;
 
 public static class EmaCloudLogic
 {
-    public static CloudColor DetermineCloudColor(IReadOnlyDictionary<int, decimal> emaValues)
+    /// <summary>Cloud color from fast vs slow EMA only (e.g. 20 vs 50). Gray if missing or equal.</summary>
+    public static CloudColor DetermineCloudColor(
+        IReadOnlyDictionary<int, decimal> emaValues,
+        int cloudFastPeriod,
+        int cloudSlowPeriod)
     {
-        var periods = emaValues.Keys.OrderBy(p => p).ToArray();
-        if (periods.Length < 3)
+        if (!emaValues.TryGetValue(cloudFastPeriod, out var fast) ||
+            !emaValues.TryGetValue(cloudSlowPeriod, out var slow))
             return CloudColor.Gray;
 
-        var fast = emaValues[periods[0]];
-        var mid = emaValues[periods[1]];
-        var slow = emaValues[periods[periods.Length - 1]];
-
-        if (fast > mid && mid > slow)
+        if (fast > slow)
             return CloudColor.Green;
-        if (fast < mid && mid < slow)
+        if (fast < slow)
             return CloudColor.Red;
-
         return CloudColor.Gray;
     }
 
     public static Bias DetermineBias(IReadOnlyDictionary<int, decimal> emaValues)
     {
-        // Periods are sorted by length (fast -> slow). Then:
-        // - Buy: EMA_fast > EMA_mid > ... > EMA_slow (strictly decreasing with period length)
-        // - Sell: EMA_fast < EMA_mid < ... < EMA_slow (strictly increasing with period length)
+        // Periods sorted ascending (20, 50, 100):
+        // Buy: EMA20 > EMA50 > EMA100
+        // Sell: EMA20 < EMA50 < EMA100  (equivalently 100 > 50 > 20)
         var periods = emaValues.Keys.OrderBy(p => p).ToArray();
         if (periods.Length < 3)
             return Bias.None;
@@ -55,4 +54,3 @@ public static class EmaCloudLogic
         return isSell ? Bias.Sell : Bias.None;
     }
 }
-

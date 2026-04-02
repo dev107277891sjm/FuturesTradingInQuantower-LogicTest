@@ -16,12 +16,24 @@ dotnet test QuantowerEmaStrategyTestSystem.sln -c Release
 ```
 
 ### 2) Run the simulator (exports CSV)
+
+**Windows UI (default)** — configure symbol label, EMA periods, max contracts, TP/SL, cooldowns, fill mode, and more:
+
 ```powershell
 dotnet run --project src/EmaStrategy.Simulator/EmaStrategy.Simulator.csproj -c Release
 ```
 
-CSV outputs are written to:
-`report/exports/historical/*` and `report/exports/live/*`
+**Headless console** (same defaults as before; useful for scripts/CI):
+
+```powershell
+dotnet run --project src/EmaStrategy.Simulator/EmaStrategy.Simulator.csproj -c Release -- console
+```
+
+CSV outputs are written under:
+
+`report/exports/simulator/<symbol>/live/*`
+
+The **symbol** field is a label used for the output folder (for example `MNQ`); it does not connect to a live broker. Bar data is loaded from the default repo file `.temp/_srv/MNQ_50k_Bar_History.csv` when present (columns `CloseTime,Open,High,Low,Close`). If that file is missing or yields no rows, the simulator generates synthetic bars using the synthetic settings in the UI.
 
 ## Quantower Real-time Adapter
 
@@ -60,9 +72,10 @@ Generated files:
 
 ## Configuration
 
-Default simulator parameters are defined in `src/EmaStrategy.Simulator/Program.cs`.
+- **Simulator UI**: run the simulator project without arguments; all parameters are edited on the form. Logic lives in `SimulatorOptions`, `SimulationService`, and `MainForm`.
+- **Console mode**: defaults are in `Program.RunConsole()` (used when you pass `console` as shown above).
 
-If you want to override behavior locally via environment variables, create a `.env` file at the repo root. Note: the simulator currently uses hardcoded defaults; `.env` is provided for future parameterization.
+If you want to override behavior locally via environment variables, create a `.env` file at the repo root. Note: `.env` is not yet wired into the simulator UI; it is reserved for future use.
 
 `.temp/` is treated as input/artifact storage and is ignored by git via `.gitignore`.
 

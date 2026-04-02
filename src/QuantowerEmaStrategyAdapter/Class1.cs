@@ -73,10 +73,14 @@ namespace QuantowerEmaStrategyAdapter
             var config = new EmaStrategyConfig
             {
                 EmaPeriods = _emaPeriods,
+                CloudFastPeriod = _emaPeriods[0],
+                CloudSlowPeriod = _emaPeriods[1],
                 WarmupBars = 100,
-                MaxContracts = 1,
+                MaxOpenContracts = 1,
+                MaxClosedContractsPerSession = int.MaxValue,
                 OrderQuantityContracts = 1,
-                MinDistanceFromFastEmaPoints = 0m,
+                MinDistanceFromEmaPoints = 0m,
+                ChasingReferenceEmaPeriod = _emaPeriods[0],
                 TakeProfitPoints = 10m,
                 StopLossPoints = 10m,
                 FillMode = EntryFillMode.NextBarOpen,

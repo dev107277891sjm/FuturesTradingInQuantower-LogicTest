@@ -11,6 +11,8 @@ public sealed class StrategyEngine
 
     private long _tradeIdCounter;
 
+    private Bar? _priorBar;
+
     private bool _hasPosition;
     private Bias _positionSide;
     private decimal _positionQtyContracts;
@@ -18,10 +20,13 @@ public sealed class StrategyEngine
     private DateTime _entryTimeUtc;
     private IReadOnlyDictionary<int, decimal>? _emaAtEntry;
 
+    private int _closedContractsSession;
+
     private bool _hasPendingOrder;
     private Bias _pendingSide;
     private decimal _pendingQtyContracts;
-    private DateTime _pendingPlacedAtUtc;
+    private long _pendingTradeId;
+    private decimal _pendingEntryPrice;
 
     public event Action<EvaluationSnapshot>? Evaluation;
     public event Action<TradeEntrySnapshot>? TradeEntry;
@@ -41,14 +46,9 @@ public sealed class StrategyEngine
 
     public void ProcessBar(Bar bar)
     {
-        // If an entry was placed on a previous bar and we want to fill at the next bar open,
-        // we consume it at the start of the current bar.
         if (_config.FillMode == EntryFillMode.NextBarOpen && _hasPendingOrder)
-        {
-            FillPendingOrderAt(bar.TimeUtc, bar.Open);
-        }
+            FillPendingOrderAt(bar.TimeUtc);
 
-        // Update EMA values using the latest close.
         _emaSet.Update(bar.Close);
         _barsSeen++;
 
@@ -56,153 +56,191 @@ public sealed class StrategyEngine
         var emaValues = _emaSet.GetValues();
         var price = bar.Close;
 
-        var cloud = EmaCloudLogic.DetermineCloudColor(emaValues);
+        var cloud = EmaCloudLogic.DetermineCloudColor(emaValues, _config.CloudFastPeriod, _config.CloudSlowPeriod);
         var bias = EmaCloudLogic.DetermineBias(emaValues);
 
-        var cooldownActive =
-            timeUtc < _nextEvaluationAtUtc;
+        var cooldownActive = timeUtc < _nextEvaluationAtUtc;
 
         if (_barsSeen < _config.WarmupBars)
         {
             EmitEvaluation(bar, price, cloud, Bias.None, emaValues, cooldownActive,
                 "History not loaded (warmup not complete).");
-
-            // Even when in warmup, we should still allow exits if a position exists
-            // (useful in sim runs); but by design we don't open trades until warmup is done.
             TryExitAt(bar, price, emaValues);
+            _priorBar = bar;
             return;
         }
 
         if (cooldownActive)
         {
-            EmitEvaluation(bar, price, cloud, bias, emaValues, cooldownActive,
-                "Debounce active.");
+            EmitEvaluation(bar, price, cloud, bias, emaValues, cooldownActive, "Debounce active.");
             TryExitAt(bar, price, emaValues);
+            _priorBar = bar;
             return;
         }
 
         _evaluationCount++;
 
-        var deviationPct = ComputeDeviationPct(price, emaValues, _config.EmaPeriods[0]);
-
-        // Apply distance filter to avoid chasing.
-        if (_config.MinDistanceFromFastEmaPoints > 0)
+        // Chasing filter: too close to reference EMA — skip new entries / adds this bar.
+        if (_config.MinDistanceFromEmaPoints > 0 &&
+            emaValues.TryGetValue(_config.ChasingReferenceEmaPeriod, out var chaseEma))
         {
-            var fastPeriod = _config.EmaPeriods[0];
-            if (emaValues.TryGetValue(fastPeriod, out var fastEma))
+            var distance = Math.Abs(price - chaseEma);
+            if (distance < _config.MinDistanceFromEmaPoints)
             {
-                var distance = Math.Abs(price - fastEma);
-                if (distance < _config.MinDistanceFromFastEmaPoints)
-                {
-                    EmitEvaluation(bar, price, cloud, Bias.None, emaValues, false,
-                        $"Distance from fast EMA too small (< {_config.MinDistanceFromFastEmaPoints} points).");
-                    TryExitAt(bar, price, emaValues);
-                    _nextEvaluationAtUtc = timeUtc.Add(_config.CooldownAfterOrderPlaced);
-                    return;
-                }
+                EmitEvaluation(bar, price, cloud, Bias.None, emaValues, false,
+                    $"Too close to {_config.ChasingReferenceEmaPeriod} EMA (< {_config.MinDistanceFromEmaPoints} pts); skip entry.");
+                TryExitAt(bar, price, emaValues);
+                _priorBar = bar;
+                _nextEvaluationAtUtc = timeUtc.Add(_config.CooldownAfterOrderPlaced);
+                return;
             }
         }
 
-        // Decide whether we can enter given current position state.
-        if (!_hasPosition && !_hasPendingOrder && bias is Bias.Buy or Bias.Sell)
+        if (_closedContractsSession >= _config.MaxClosedContractsPerSession)
         {
-            var allowed = CanEnterSide(bias);
-            if (!allowed)
-            {
-                EmitEvaluation(bar, price, cloud, Bias.None, emaValues, false,
-                    "Entry blocked by position rules.");
-                TryExitAt(bar, price, emaValues);
-                _nextEvaluationAtUtc = timeUtc.Add(_config.CooldownAfterOrderPlaced);
-                return;
-            }
-
-            if (_positionSide == bias)
-            {
-                // Same side already open; in this simplified engine we don't pyramid.
-                EmitEvaluation(bar, price, cloud, bias, emaValues, false,
-                    "Same-side position already open (no pyramid).");
-                TryExitAt(bar, price, emaValues);
-                _nextEvaluationAtUtc = timeUtc.Add(_config.CooldownAfterOrderPlaced);
-                return;
-            }
-
-            if (_config.MaxContracts > 0 && _config.OrderQuantityContracts > _config.MaxContracts)
-            {
-                EmitEvaluation(bar, price, cloud, Bias.None, emaValues, false,
-                    "Max contracts reached (configured quantity exceeds max).");
-                TryExitAt(bar, price, emaValues);
-                _nextEvaluationAtUtc = timeUtc.Add(_config.CooldownAfterOrderPlaced);
-                return;
-            }
-
-            // Place order (fill either immediately or at next bar open).
-            var tradeId = ++_tradeIdCounter;
-            _hasPendingOrder = true;
-            _pendingSide = bias;
-            _pendingQtyContracts = _config.OrderQuantityContracts;
-            _pendingPlacedAtUtc = timeUtc;
-
-            if (_config.FillMode == EntryFillMode.SignalBarClose)
-            {
-                // Immediate fill at bar close using the "signal bar" price.
-                _hasPendingOrder = false;
-                EnterPosition(tradeId, bias, _pendingQtyContracts, timeUtc, price, emaValues);
-                EmitEvaluation(bar, price, cloud, bias, emaValues, false,
-                    "Order filled (signal bar close).");
-            }
-            else
-            {
-                EmitEvaluation(bar, price, cloud, bias, emaValues, false,
-                    "Order placed (will fill on next bar open).");
-            }
-
-            if (_config.FillMode == EntryFillMode.NextBarOpen)
-            {
-                _nextEvaluationAtUtc = timeUtc.Add(_config.CooldownAfterOrderPlaced);
-            }
-            else
-            {
-                _nextEvaluationAtUtc = timeUtc.Add(_config.CooldownAfterOrderPlaced);
-            }
-
-            // Exit logic still applies on the same bar (e.g., if tp/sl is tiny).
+            EmitEvaluation(bar, price, cloud, bias, emaValues, false, "Max closed contracts this session reached.");
             TryExitAt(bar, price, emaValues);
+            _priorBar = bar;
+            _nextEvaluationAtUtc = timeUtc.Add(_config.CooldownAfterOrderPlaced);
             return;
         }
 
-        // If we're flat but bias is None, or we're already in position, log it.
+        if (_priorBar is null)
+        {
+            EmitEvaluation(bar, price, cloud, bias, emaValues, false, "No prior candle yet for entry price.");
+            TryExitAt(bar, price, emaValues);
+            _priorBar = bar;
+            _nextEvaluationAtUtc = timeUtc.Add(_config.CooldownAfterOrderPlaced);
+            return;
+        }
+
+        var priorPrice = GetPriorCandlePrice(_priorBar.Value, _config.EntryPriceField);
+
+        if (bias is Bias.Buy or Bias.Sell)
+        {
+            if (_hasPosition)
+            {
+                if (_positionSide != bias)
+                {
+                    EmitEvaluation(bar, price, cloud, bias, emaValues, false,
+                        "Opposite bias while in position (no auto-reverse in test engine).");
+                }
+                else if (_config.AllowAverageDown)
+                {
+                    var room = _config.MaxOpenContracts - _positionQtyContracts;
+                    if (room > 0 && _config.OrderQuantityContracts > 0)
+                    {
+                        var addQty = Math.Min(_config.OrderQuantityContracts, room);
+                        var tid = ++_tradeIdCounter;
+                        AddOrEnterPosition(tid, bias, addQty, timeUtc, priorPrice, emaValues);
+                        EmitEvaluation(bar, price, cloud, bias, emaValues, false,
+                            $"Average down at prior-candle {_config.EntryPriceField} ({priorPrice:0.####}).");
+                        _nextEvaluationAtUtc = timeUtc.Add(_config.CooldownAfterOrderPlaced);
+                        TryExitAt(bar, price, emaValues);
+                        _priorBar = bar;
+                        return;
+                    }
+
+                    EmitEvaluation(bar, price, cloud, bias, emaValues, false,
+                        "Same-side position; max contracts or average-down blocked.");
+                }
+                else
+                {
+                    EmitEvaluation(bar, price, cloud, bias, emaValues, false,
+                        "Same-side position already open (average down off).");
+                }
+
+                TryExitAt(bar, price, emaValues);
+                _priorBar = bar;
+                _nextEvaluationAtUtc = timeUtc.Add(_config.CooldownAfterOrderPlaced);
+                return;
+            }
+
+            if (_hasPendingOrder)
+            {
+                EmitEvaluation(bar, price, cloud, Bias.None, emaValues, false, "Pending order prevents new entry.");
+                TryExitAt(bar, price, emaValues);
+                _priorBar = bar;
+                _nextEvaluationAtUtc = timeUtc.Add(_config.CooldownAfterOrderPlaced);
+                return;
+            }
+
+            if (_config.OrderQuantityContracts > _config.MaxOpenContracts)
+            {
+                EmitEvaluation(bar, price, cloud, Bias.None, emaValues, false,
+                    "Order qty exceeds max open contracts.");
+                TryExitAt(bar, price, emaValues);
+                _priorBar = bar;
+                _nextEvaluationAtUtc = timeUtc.Add(_config.CooldownAfterOrderPlaced);
+                return;
+            }
+
+            TryOpenOrAdd(bias, priorPrice, timeUtc, emaValues, _config.OrderQuantityContracts, bar, cloud);
+            _priorBar = bar;
+            return;
+        }
+
         if (_hasPosition)
-        {
-            EmitEvaluation(bar, price, cloud, Bias.None, emaValues, false,
-                "In position; waiting for tp/sl or exit rule.");
-        }
+            EmitEvaluation(bar, price, cloud, Bias.None, emaValues, false, "In position; waiting for exit rule.");
         else
-        {
             EmitEvaluation(bar, price, cloud, Bias.None, emaValues, false,
-                bias == Bias.None ? "No trade signal (EMA ordering not met)." : "Pending order state prevents entry.");
-        }
+                bias == Bias.None ? "No trade signal (EMA stack not aligned)." : "No entry.");
 
         _nextEvaluationAtUtc = timeUtc.Add(_config.CooldownAfterOrderPlaced);
         TryExitAt(bar, price, emaValues);
+        _priorBar = bar;
     }
 
-    private bool CanEnterSide(Bias bias)
+    private void TryOpenOrAdd(
+        Bias bias,
+        decimal entryPrice,
+        DateTime timeUtc,
+        IReadOnlyDictionary<int, decimal> emaValues,
+        decimal qtyContracts,
+        Bar bar,
+        CloudColor cloud)
     {
-        // In this simplified engine, we only allow entering when we're flat.
-        // (A more complete engine could support reversal/hedging.)
-        if (_hasPosition)
-            return false;
+        if (qtyContracts <= 0)
+            return;
 
-        if (_hasPendingOrder)
-            return false;
+        var tradeId = ++_tradeIdCounter;
+        _pendingEntryPrice = entryPrice;
 
-        if (bias is Bias.Buy or Bias.Sell)
-            return true;
+        if (_config.FillMode == EntryFillMode.SignalBarClose)
+        {
+            AddOrEnterPosition(tradeId, bias, qtyContracts, timeUtc, entryPrice, emaValues);
+            EmitEvaluation(bar, bar.Close, cloud, bias, emaValues, false,
+                $"Filled at prior-candle {_config.EntryPriceField} ({entryPrice:0.####}).");
+        }
+        else
+        {
+            _hasPendingOrder = true;
+            _pendingSide = bias;
+            _pendingQtyContracts = qtyContracts;
+            _pendingTradeId = tradeId;
+            EmitEvaluation(bar, bar.Close, cloud, bias, emaValues, false,
+                $"Order placed; fill at prior-candle {_config.EntryPriceField} ({entryPrice:0.####}) on next bar.");
+        }
 
-        return false;
+        _nextEvaluationAtUtc = timeUtc.Add(_config.CooldownAfterOrderPlaced);
+        TryExitAt(bar, bar.Close, emaValues);
     }
 
-    private void EnterPosition(
+    private void FillPendingOrderAt(DateTime fillTimeUtc)
+    {
+        if (_pendingQtyContracts <= 0)
+        {
+            _hasPendingOrder = false;
+            return;
+        }
+
+        _hasPendingOrder = false;
+        var emaValues = _emaSet.GetValues();
+        AddOrEnterPosition(_pendingTradeId, _pendingSide, _pendingQtyContracts, fillTimeUtc, _pendingEntryPrice, emaValues);
+        _pendingQtyContracts = 0;
+    }
+
+    private void AddOrEnterPosition(
         long tradeId,
         Bias side,
         decimal qtyContracts,
@@ -210,6 +248,24 @@ public sealed class StrategyEngine
         decimal entryPrice,
         IReadOnlyDictionary<int, decimal> emaValues)
     {
+        if (_hasPosition && _positionSide == side)
+        {
+            var totalQty = _positionQtyContracts + qtyContracts;
+            _entryPrice = (_entryPrice * _positionQtyContracts + entryPrice * qtyContracts) / totalQty;
+            _positionQtyContracts = totalQty;
+            _entryTimeUtc = entryTimeUtc;
+            _emaAtEntry = emaValues.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+
+            TradeEntry?.Invoke(new TradeEntrySnapshot(
+                tradeId,
+                side,
+                qtyContracts,
+                entryTimeUtc,
+                entryPrice,
+                _emaAtEntry));
+            return;
+        }
+
         _hasPosition = true;
         _positionSide = side;
         _positionQtyContracts = qtyContracts;
@@ -226,58 +282,68 @@ public sealed class StrategyEngine
             _emaAtEntry));
     }
 
-    private void FillPendingOrderAt(DateTime fillTimeUtc, decimal fillPrice)
-    {
-        // If we fill pending orders at the next bar open, the trade ID is already incremented when placed.
-        // For simplicity, we derive "last trade id" from the counter without tracking it separately.
-        if (_pendingQtyContracts <= 0)
-        {
-            _hasPendingOrder = false;
-            return;
-        }
-
-        var tradeId = _tradeIdCounter;
-        _hasPendingOrder = false;
-        EnterPosition(tradeId, _pendingSide, _pendingQtyContracts, fillTimeUtc, fillPrice, _emaSet.GetValues());
-        _pendingQtyContracts = 0;
-    }
-
     private void TryExitAt(Bar bar, decimal price, IReadOnlyDictionary<int, decimal> emaValues)
     {
         if (!_hasPosition)
             return;
 
-        var tp = _config.TakeProfitPoints;
-        var sl = _config.StopLossPoints;
+        var tpPts = GetTakeProfitDistancePoints();
+        var slPts = GetStopLossDistancePoints();
 
         if (_positionSide == Bias.Buy)
         {
-            var takeProfitLevel = _entryPrice + tp;
-            var stopLossLevel = _entryPrice - sl;
+            var hitTp = price >= _entryPrice + tpPts;
+            var hitSl = _config.StopLossMode == StopLossMode.Ema
+                ? emaValues.TryGetValue(_config.StopLossAnchorEmaPeriod, out var eSl) && price <= eSl
+                : price <= _entryPrice - slPts;
 
-            if (price >= takeProfitLevel || price <= stopLossLevel)
-            {
+            if (hitTp || hitSl)
                 ExitPosition(bar.TimeUtc, price, emaValues);
-            }
         }
         else if (_positionSide == Bias.Sell)
         {
-            var takeProfitLevel = _entryPrice - tp;
-            var stopLossLevel = _entryPrice + sl;
+            var hitTp = price <= _entryPrice - tpPts;
+            var hitSl = _config.StopLossMode == StopLossMode.Ema
+                ? emaValues.TryGetValue(_config.StopLossAnchorEmaPeriod, out var eSl) && price >= eSl
+                : price >= _entryPrice + slPts;
 
-            if (price <= takeProfitLevel || price >= stopLossLevel)
-            {
+            if (hitTp || hitSl)
                 ExitPosition(bar.TimeUtc, price, emaValues);
-            }
         }
+    }
+
+    private decimal GetTakeProfitDistancePoints()
+    {
+        if (_config.TakeProfitMode == TakeProfitMode.Points)
+            return _config.TakeProfitPoints;
+
+        var denom = _positionQtyContracts * _config.DollarsPerPointPerContract;
+        if (denom <= 0)
+            return _config.TakeProfitPoints;
+        return _config.TakeProfitDollars / denom;
+    }
+
+    private decimal GetStopLossDistancePoints()
+    {
+        if (_config.StopLossMode == StopLossMode.Points)
+            return _config.StopLossPoints;
+        if (_config.StopLossMode == StopLossMode.Dollars)
+        {
+            var denom = _positionQtyContracts * _config.DollarsPerPointPerContract;
+            if (denom <= 0)
+                return _config.StopLossPoints;
+            return _config.StopLossDollars / denom;
+        }
+        return 0m;
     }
 
     private void ExitPosition(DateTime exitTimeUtc, decimal exitPrice, IReadOnlyDictionary<int, decimal> emaValues)
     {
-        // Profit/Loss in "points" (not dollarized).
-        var pnl = _positionSide == Bias.Buy
-            ? (exitPrice - _entryPrice) * _positionQtyContracts
-            : (_entryPrice - exitPrice) * _positionQtyContracts;
+        var pointMove = _positionSide == Bias.Buy
+            ? (exitPrice - _entryPrice)
+            : (_entryPrice - exitPrice);
+
+        var pnlDollars = pointMove * _positionQtyContracts * _config.DollarsPerPointPerContract;
 
         var tradeId = _tradeIdCounter;
 
@@ -289,8 +355,10 @@ public sealed class StrategyEngine
             _entryPrice,
             exitTimeUtc,
             exitPrice,
-            pnl,
+            pnlDollars,
             emaValues.ToDictionary(kvp => kvp.Key, kvp => kvp.Value)));
+
+        _closedContractsSession += (int)Math.Min(int.MaxValue - _closedContractsSession, Math.Round(_positionQtyContracts, MidpointRounding.AwayFromZero));
 
         _hasPosition = false;
         _positionQtyContracts = 0;
@@ -310,6 +378,7 @@ public sealed class StrategyEngine
         bool cooldownActive,
         string reason)
     {
+        var fast = _config.EmaPeriods.Length > 0 ? _config.EmaPeriods[0] : 20;
         Evaluation?.Invoke(new EvaluationSnapshot(
             bar.TimeUtc,
             bar.Index,
@@ -317,7 +386,7 @@ public sealed class StrategyEngine
             price,
             cloudColor,
             bias,
-            ComputeDeviationPct(price, emaValues, _config.EmaPeriods[0]),
+            ComputeDeviationPct(price, emaValues, fast),
             emaValues.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
             _hasPendingOrder,
             cooldownActive,
@@ -332,5 +401,17 @@ public sealed class StrategyEngine
         var diff = price - fastEma;
         return diff / fastEma;
     }
-}
 
+    private static decimal GetPriorCandlePrice(Bar b, PriorCandlePriceField field)
+    {
+        return field switch
+        {
+            PriorCandlePriceField.Open => b.Open,
+            PriorCandlePriceField.Close => b.Close,
+            PriorCandlePriceField.High => b.High,
+            PriorCandlePriceField.Low => b.Low,
+            PriorCandlePriceField.Mid => (b.High + b.Low) / 2m,
+            _ => b.Close
+        };
+    }
+}
